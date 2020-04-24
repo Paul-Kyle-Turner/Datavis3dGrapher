@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3d_plot</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js" charset="utf-8"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-csv/0.71/jquery.csv-0.71.min.js"></script>
+    <script src="jquery-3.5.0.min.js"></script>
+</head>
+<body>
+<p>3d sequence plotter.</p>
+
+<!-- Create a form with a button that loads in a metric. -->
+
+<!-- https://www.html5rocks.com/en/tutorials/file/dndfiles/ -->
+<!-- I did used this guys code to get multiple files in at the same time -->
+<input type="file" id="metrics" name="files[]" multiple />
+<output id="list-metrics"></output>
+
+<div class="ready"></div>
+
+<form action='' id='plot-form' onsubmit='plot_valid();return false'>
+    <div class=radial-buttons-list>
+        <div class=labels-color></div>
+        <div class=metrics-button-list></div>
+        <div class=number-slider></div>
+        <div class=submit-button-div></div>
+    </div>
+</form>
+
+<script>
+
+    document.getElementById('metrics').addEventListener('change', handleFileSelect, false);
+
+    let metricList = {};
+    let labelSet;
+    let sample;
+    let sequence;
+
+    function createSettings() {
+
+        function createMetricButtons() {
+            let group = ""
+            for( let met in metricList ){
+                group += "<input type='radio' id='met' name='metric'> key </input>"
+                    .replace('met', met)
+                    .replace('key', met);
+            }
+            $('div.metrics-button-list').html(group)
+        }
+        createMetricButtons();
+
+        function createLabelColorButtons() {
+            labelSet = labelSet.split(/r?\n/);
+
+            let tempSet = [];
+            for ( let lab in labelSet ){
+                tempSet.push(labelSet[lab].replace(/\r?\n|\r/, ''));
+            }
+            tempSet.pop();
+            labelSet = tempSet;
+
+            let group = "<input type='radio' id='total' name='labelColor'> Total </input>"
+            for ( let lab in labelSet ){
+                if( labelSet[lab].length > 1 ) {
+                    group += "<input type='radio' id='lab' name='labelColor'> key </input>"
+                        .replace('lab', labelSet[lab].replace(/\r?\n|\r/, ''))
+                        .replace('key', labelSet[lab].replace(/\r?\n|\r/, ''));
+                }
+            }
+            $("div.labels-color").html(group)
+        }
+        createLabelColorButtons();
+
+        function createNumberOfObservationsSlider() {
+
+            function sampleReformat(){
+                sample = sample.split(/r?\n/);
+                let tempList = [];
+                for( let temp in sample ){
+                    let slap = sample[temp].split(',');
+                    if( slap.length > 1) {
+                        tempList.push(slap);
+                    }
+
+                }
+                sample = tempList;
+            }
+
+            sampleReformat()
+
+            let group = "<input type='range' min='1' max='100' class='slider' id='numPoints'>";
+
+            $("div.number-slider").html(group);
+        }
+        createNumberOfObservationsSlider();
+
+        $("div.submit-button-div").html("<input type='button' id='submit-button'> Submit </input>");
+
+        document.getElementById('submit-button').addEventListener('click', plot_valid, false);
+
+        $("div.ready").remove();
+        $(".ready").remove();
+
+    }
+
+    function handleFileSelect(evt) {
+        let files = evt.target.files; // FileList object
+
+        // stole this from stackoverflow
+        // this is not my function all props go to him
+        // read multiple riles "fileReader"
+        function readmultifiles(files) {
+            let reader = new FileReader();
+            function readFile(index) {
+                if( index >= files.length ) {
+                    console.log('ready')
+                    return;
+                }
+                let file = files[index];
+                reader.onload = function(e) {
+                    // get file content
+                    let bin = e.target.result;
+
+                    if (files[index].name.endsWith('metric.csv')) {
+                        metricList[files[index].name] = bin;
+                        console.log('metric');
+                    } else if (files[index].name.endsWith('label.csv')) {
+                        labelSet = bin;
+                        console.log('labelSet');
+                    } else if (files[index].name.endsWith('sample.csv')) {
+                        sample = bin;
+                        console.log('sample');
+                    } else if (files[index].name.endsWith('sequence.csv')){
+                        sequence = bin;
+                        console.log('sequence')
+                    } else {
+                        console.log('Error file type not recognized.');
+                    }
+
+                    readFile(index+1);
+                }
+
+                reader.readAsText(file);
+            }
+            readFile(0);
+            $("div.ready").html("<input type='button' id='ready-button' value='ready' >");
+        }
+
+        readmultifiles(files);
+
+
+
+        document.getElementById('ready-button').addEventListener('click', createSettings, false);
+    }
+
+    let setup = true;
+    let sampleHeader;
+    let metricHeaderList = {};
+
+    function plot_valid(){
+
+        let minMetricVal = 100000000;
+        let maxMetricVal = -100000000;
+
+        // dirty function to get the range of the axis
+        function getSetMinMaxVal(metric){
+            for( let met in metric ){
+                let temp = metric[met];
+                let min = Math.min(temp);
+                let max = Math.max(temp);
+                if( min < minMetricVal ){
+                    minMetricVal = min;
+                }
+                if( max > maxMetricVal ){
+                    maxMetricVal = max;
+                }
+            }
+        }
+
+        // make sure that all the data is in the way that we need before we start doing things to it
+        function setupData() {
+
+            function formatMetric(metric) {
+                let tempMetric = [];
+                metric = metric.split(/r?\n/);
+                for(let met in metric){
+                    tempMetric.push(metric[met].split(','));
+                }
+                metric = tempMetric;
+                return metric;
+            }
+
+            for( let met in metricList ){
+                metricList[met] = formatMetric(metricList[met]);
+            }
+
+            function collectMetricHeaders() {
+                for (let met in metricList) {
+                    let temp = metricList[met].shift();
+                    metricHeaderList[met] = temp;
+                }
+                return metricHeaderList;
+            }
+
+            metricHeaderList = collectMetricHeaders();
+            sampleHeader = sample.shift();
+
+            function sequenceToArray(sequence){
+                let goodSequence = [];
+                sequence = sequence.split(/r?\n/)
+                for( let seq in sequence){
+                    goodSequence.push(sequence[seq])
+                }
+                return sequence
+            }
+            sequence = sequenceToArray(sequence)
+
+            getSetMinMaxVal(metricList[getMetricKey()])
+
+        }
+        if( setup ) {
+            setupData();
+            setup = false;
+        }
+
+        // get the color that is selected
+        function getColor(){
+            let allColor = document.getElementById('total').checked;
+            if ( allColor === true ){
+                return "total";
+            } else {
+                for( let lab in labelSet ){
+                    let tempCheck = document.getElementById(labelSet[lab]).checked;
+                    if( tempCheck ){
+                        return labelSet[lab];
+                    }
+                }
+            }
+            return "total";
+        }
+        // get the metric key that is selected
+        function getMetricKey(){
+            let temp;
+            for ( let met in metricList ){
+                let tempCheck = document.getElementById(met).checked;
+                if ( tempCheck ){
+                    return met;
+                }
+                temp = met;
+            }
+            return temp;
+        }
+        // get the slider value that is shown
+        function getSliderValue(){
+            return document.getElementById('numPoints').value;
+        }
+        // get the number of samples from the total amount to show
+        function getNumberOfSamplesToShow() {
+            let perNumber = getSliderValue();
+            let numSamples = sample.length;
+            return Math.floor(numSamples * (perNumber / 100));
+        }
+        // get the length of the metric 0
+        function getMetricLength(metKey){
+            return metricHeaderList[getMetricKey()].length - 2; // subtract 2 for id and class
+        }
+        // translate that into a range variable
+        function lengthToVariable(len){
+            let temp = [];
+            for( let i = 0; i < len; i++){
+                temp.push(i);
+            }
+            return temp;
+        }
+        // create a list of lists of the ranges for display
+        function multiplyForNumber(number, array){
+            let tempList = [];
+            for( let i = 0; i < number; i++ ){
+                let innerList = [];
+                for ( let item in array ){
+                    innerList.push(item);
+                }
+                tempList.push(innerList);
+            }
+            return tempList;
+        }
+        // get the length of the api sequence embedding
+        function getLenSequence(){
+            return sequence.length
+        }
+
+        // wrapper function for the spaghetti above
+        function timeVariable(){
+            return multiplyForNumber(getNumberOfSamplesToShow(), lengthToVariable(getMetricLength(getMetricKey())));
+            //return multiplyForNumber(400, lengthToVariable(getMetricLength(getMetricKey())));
+        }
+        // Time variable
+        let x = timeVariable();// Time variable
+        console.log(x)
+
+        // functions for determining which columns to use
+        function getColIndexByName(colName, header){
+            for( let head in header ){
+                if( header[head].toLowerCase().replace(/\r?\n|\r/, '') === colName){
+                    return head;
+                }
+            }
+            return -1;
+        }
+
+        //match the metrics to the samples used based on the index col
+        function metricMatch(metric, sample, metricIndex, sampleIndex) {
+            let usedMetrics = [];
+
+            let i = 0;
+
+            while(i < metric.length){
+                for( let samp in sample ){
+                    if( metric[i][metricIndex] === sample[samp][sampleIndex] ){
+                        usedMetrics.push(metric[i].slice(2));
+                        break; // break out of the nested for
+                    }
+                }
+                i++;
+            }
+            return usedMetrics;
+        }
+        // wrapper function for the metric variables
+        function metricVariable(getNumberOfSamplesToShow){
+            let metric = metricList[getMetricKey()];
+
+            let metricIndex = getColIndexByName("index", metricHeaderList[getMetricKey()]);
+            let sampleIndex = getColIndexByName("index", sampleHeader);
+
+            let metricMatched = metricMatch(metric, sample, metricIndex, sampleIndex);
+
+            return metricMatched.slice(0, getNumberOfSamplesToShow);
+        }
+        // metric variable
+        let z = metricVariable(getNumberOfSamplesToShow()); // metric variable
+        console.log(z)
+
+        // index of the data within the field
+        let dataIndex = getColIndexByName("data", sampleHeader);
+        let labelIndex = getColIndexByName("label", sampleHeader);
+
+        /*
+        function createSequence(label, sample, indexOfData){
+            let sequence = [];
+            for( let samp in sample ){
+                let temp = sample[samp][indexOfData].split(' ');
+                for( let seq_pos in temp ){
+                    if( !sequence.includes(temp[seq_pos].replace(/\r?\n|\r|"/, '')) ){
+                        sequence.push(temp[seq_pos].replace(/\r?\n|\r|"/, ''));
+                    }
+                }
+            }
+            return sequence;
+        }
+        let sequence = createSequence(sequenceType, sample, dataIndex);
+
+
+
+        function sequenceVariable(sequence, dataIndex, numberOfSamples){
+
+            let callVariable = [];
+            let i = 0;
+            while(i < numberOfSamples){
+                let currentCallIndexes = [];
+                let currentCall = sample[i][dataIndex].split(' ');
+                for( let call in currentCall ){
+                    let index = currentCall.indexOf(call);
+                    if(index !== -1){
+                        currentCallIndexes.push(call);
+                    }
+                    callVariable.push(currentCallIndexes);
+                }
+                i++;
+            }
+            return callVariable;
+        }
+
+        let y = sequenceVariable(sequence, dataIndex, getNumberOfSamplesToShow()); // api call translate
+        */
+
+        function sequenceVariable(dataIndex, labelIndex, numberOfSamplesToShow) {
+
+            function rowSetup(row){
+                for( let i = row.length; i < getMetricLength(); i++ ){
+                   row.push(-1);
+                }
+                return row;
+            }
+
+            let data = [];
+            let i = 0;
+            while(i < numberOfSamplesToShow){
+                data.push(rowSetup(sample[i][dataIndex].split(' ')));
+                i++;
+            }
+
+            return data;
+
+        }
+        let y = sequenceVariable(dataIndex, labelIndex, getNumberOfSamplesToShow())
+        console.log(y)
+
+        function setToColor(labels){
+            let colors = ['blue', 'red', 'orange', 'green', 'black', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
+            let returnColors = [];
+            let i = 0;
+            while( i < labels.length ){
+                let j = 0;
+                let found = false;
+                while( j < labelSet.length && !found){
+                    if( labelSet[j] === labels[i] ){
+                        returnColors.push(colors[j]);
+                        found = true;
+                    }
+                    j++;
+                }
+                if( !found ){
+                    returnColors.push('HotPink')
+                }
+                i++;
+            }
+            return returnColors
+        }
+
+        function getLabelList(sample, sampleHeader){
+            let tempLabel = [];
+            let labelIndex = getColIndexByName('label', sampleHeader);
+            for( let samp in sample ){
+                tempLabel.push(sample[samp][labelIndex]);
+            }
+            return tempLabel;
+        }
+
+        function colorForClass(numberOfSamplesToShow) {
+
+            let color = getColor();
+            let labels = getLabelList(sample, sampleHeader).slice(0, numberOfSamplesToShow);
+
+            if( color.toLowerCase() === 'total' ){
+                return setToColor(labels);
+            } else {
+                let labelTemp = []
+                for( let label in labels ){
+                    if( labels[label] !== color ){
+                        labelTemp.push('notColor')
+                    } else {
+                        labelTemp.push(color)
+                    }
+                }
+                return setToColor(labelTemp)
+            }
+        }
+        let c = colorForClass(getNumberOfSamplesToShow()); // color based on the type of malware
+        console.log(c)
+
+        // here is a plotly plot of the line data, not much that needs to be changed but the x y z c
+        // of the data needs to be computed
+        // Change someDiv to the name of the div that you want the plot in
+
+        let endSliceMax;
+
+        function createDataLine(x, y, z, c, i){
+
+            let endSlice = z.indexOf(-1);
+
+            if( endSlice > endSliceMax ){
+                endSliceMax = endSlice;
+            }
+
+            let xT = x[i].slice(0, endSlice);
+            let yT = y[i].slice(0, endSlice);
+            let zT = z[i].slice(0, endSlice);
+
+            return {
+                type: 'scatter3d',
+                mode: 'lines',
+                x: xT,
+                y: yT,
+                z: zT,
+                opacity: 1,
+                line: {
+                    width: 2,
+                    color: c[i],
+                    reversescale: false
+                }
+            }
+        }
+
+        function createDataLines(x, y, z, c){
+            let tempList = [];
+            for( let i in x ){
+                tempList.push(createDataLine(x, y, z, c, i));
+            }
+            return tempList;
+        }
+
+        let linesListDict = createDataLines(x, y, z, c);
+
+        Plotly.newPlot('plotDiv',
+            linesListDict,
+            { // LAYOUT SECTION
+                scene: {
+                    xaxis:{ // Time
+                        title: "Time position",
+                        nticks: 5,
+                        range: [0, endSliceMax]
+                    },
+                    yaxis:{ // Sequence
+                        title: "Sequence Embedding",
+                        nticks: 10,
+                        range: [0, getLenSequence()]
+                    },
+                    zaxis:{ // Metric
+                        title: getMetricKey(),
+                        range: [minMetricVal, maxMetricVal]
+                    },
+                },
+                autosize: true,
+                autocolorscale: false,
+                height: 800,
+                width: 800
+            });
+
+    }
+
+</script>
+
+
+<div id="plotDiv"></div>
+
+<script>
+
+
+
+</script>
+</body>
+</html>
