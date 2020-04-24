@@ -52,8 +52,6 @@
         createMetricButtons();
 
         function createLabelColorButtons() {
-            labelSet = labelSet.split(/r?\n/);
-
             let tempSet = [];
             for ( let lab in labelSet ){
                 tempSet.push(labelSet[lab].replace(/\r?\n|\r/, ''));
@@ -76,22 +74,20 @@
 
         function createNumberOfObservationsSlider() {
 
-            function sampleReformat(){
-                sample = sample.split(/r?\n/);
-                let tempList = [];
-                for( let temp in sample ){
-                    let slap = sample[temp].split(',');
-                    if( slap.length > 1) {
-                        tempList.push(slap);
-                    }
-
-                }
-                sample = tempList;
-            }
-
-            sampleReformat()
-            let group = "<p> If percentage is selected, select the percent of sample using the slide bar.</p>"
-            group += "<input type='range' min='1' max='100' class='slider' id='numPoints'>";
+            let group = "<div id='selection'>";
+            group += "<div id='number-selection'>";
+            group += "<p> If percentage is selected, select the percent of sample using the slide bar.</p>";
+            group += "<input type='range' min='1' max='100' class='slider' id='percentNumPointsB'>";
+            group += "<input type='radio' name='numberSelect' class='radio-button' id='percentNumPoints'> Percentage </input>";
+            group += "<input type='number' id='exactNumPointsB' class='exactPoints'>";
+            group += "<input type='radio' name='numberSelect' class='radio-button' id='exactNumPoints'> Exact </input>";
+            group += "<div>";
+            group += "<div id='sample-selection'>";
+            group += "<p> Select from sample : </p>";
+            group += "<input type='radio' name='sampleSelect' class='radio-button' id='topDownSelect'> Top Down </input>";
+            group += "<input type='radio' name='sampleSelect' class='radio-button' id='randomSelect'> Random </input>"
+            group += "<div>";
+            group += "</div>";
 
             $("div.number-slider").html(group);
         }
@@ -109,6 +105,40 @@
     function handleFileSelect(evt) {
         let files = evt.target.files; // FileList object
 
+        function sequenceToArray(sequence){
+            let goodSequence = [];
+            sequence = sequence.split(/r?\n/)
+            for( let seq in sequence){
+                goodSequence.push(sequence[seq])
+            }
+            return sequence
+        }
+
+        function formatMetric(metric, key) {
+            let tempMetric = [];
+            metric = metric.split(/r?\n/);
+            metricHeaderList[key] = metric.shift().split(',')
+            for(let met in metric){
+                tempMetric.push(metric[met].split(','));
+            }
+            metric = tempMetric;
+            return metric;
+        }
+
+        function sampleReformat(){
+            sample = sample.split(/r?\n/);
+            let tempList = [];
+            for( let temp in sample ){
+                let slap = sample[temp].split(',');
+                if( slap.length > 1) {
+                    tempList.push(slap);
+                }
+
+            }
+            sample = tempList;
+        }
+
+
         // stole this from stackoverflow
         // this is not my function all props go to him
         // read multiple riles "fileReader"
@@ -125,16 +155,18 @@
                     let bin = e.target.result;
 
                     if (files[index].name.endsWith('metric.csv')) {
-                        metricList[files[index].name] = bin;
+                        metricList[files[index].name] = formatMetric(bin, files[index].name);
                         console.log('metric');
                     } else if (files[index].name.endsWith('label.csv')) {
-                        labelSet = bin;
+                        labelSet = bin.split(/r?\n/);
                         console.log('labelSet');
                     } else if (files[index].name.endsWith('sample.csv')) {
                         sample = bin;
+                        sampleReformat();
+                        sampleHeader = sample.shift();
                         console.log('sample');
                     } else if (files[index].name.endsWith('sequence.csv')){
-                        sequence = bin;
+                        sequence = sequenceToArray(bin);
                         console.log('sequence')
                     } else {
                         console.log('Error file type not recognized.');
@@ -146,6 +178,7 @@
                 reader.readAsText(file);
             }
             readFile(0);
+
             $("div.ready").html("<input type='button' id='ready-button' value='ready' >");
         }
 
@@ -199,56 +232,7 @@
         */
 
         // make sure that all the data is in the way that we need before we start doing things to it
-        function setupData() {
 
-            function formatMetric(metric, key) {
-                let tempMetric = [];
-                metric = metric.split(/r?\n/);
-                metricHeaderList[key] = metric.shift().split(',')
-                for(let met in metric){
-                    tempMetric.push(metric[met].split(','));
-                }
-                metric = tempMetric;
-                return metric;
-            }
-
-            for( let met in metricList ){
-                metricList[met] = formatMetric(metricList[met], met);
-            }
-
-            /*
-            function collectMetricHeaders() {
-                for (let met in metricList) {
-                    let temp = metricList[met].shift();
-                    metricHeaderList[met] = temp;
-                }
-                return metricHeaderList;
-            }
-
-            metricHeaderList = collectMetricHeaders();
-            */
-
-            sampleHeader = sample.shift();
-
-            function sequenceToArray(sequence){
-                let goodSequence = [];
-                sequence = sequence.split(/r?\n/)
-                for( let seq in sequence){
-                    goodSequence.push(sequence[seq])
-                }
-                return sequence
-            }
-            sequence = sequenceToArray(sequence)
-
-            //getSetMinMaxVal(metricList[getMetricKey()])
-            //console.log(minMetricVal)
-            //console.log(maxMetricVal)
-
-        }
-        if( setup ) {
-            setupData();
-            setup = false;
-        }
 
         // get the color that is selected
         function getColor(){
@@ -517,8 +501,7 @@
                 line: {
                     width: 2,
                     color: c[i],
-                    reversescale: false
-                    name:
+                    reversescale: false,
                 }
             }
         }
