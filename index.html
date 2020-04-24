@@ -41,7 +41,7 @@
     function createSettings() {
 
         function createMetricButtons() {
-            let group = ""
+            let group = "<p> Select the metric. </p>"
             for( let met in metricList ){
                 group += "<input type='radio' id='met' name='metric'> key </input>"
                     .replace('met', met)
@@ -61,7 +61,8 @@
             tempSet.pop();
             labelSet = tempSet;
 
-            let group = "<input type='radio' id='total' name='labelColor'> Total </input>"
+            let group = "<p> Select the label group that you would like to color. </p>"
+            group += "<input type='radio' id='total' name='labelColor'> Total </input>"
             for ( let lab in labelSet ){
                 if( labelSet[lab].length > 1 ) {
                     group += "<input type='radio' id='lab' name='labelColor'> key </input>"
@@ -89,8 +90,8 @@
             }
 
             sampleReformat()
-
-            let group = "<input type='range' min='1' max='100' class='slider' id='numPoints'>";
+            let group = "<p> If percentage is selected, select the percent of sample using the slide bar.</p>"
+            group += "<input type='range' min='1' max='100' class='slider' id='numPoints'>";
 
             $("div.number-slider").html(group);
         }
@@ -161,30 +162,49 @@
 
     function plot_valid(){
 
-        let minMetricVal = 100000000;
-        let maxMetricVal = -100000000;
+        //let minMetricVal = 100000000;
+        //let maxMetricVal = -100000000;
+
+        /*
+        // IDK math.min and max didn't work for me
+        function minMaxFromArr(arr) {
+            let mi = arr[0]
+            let ma = arr[0]
+            let i = 0
+            while( i < arr.length ){
+                if( mi > arr[i] ){
+                    mi = arr[i]
+                } else if ( ma < arr [i] ){
+                    ma = arr[i]
+                }
+            }
+            if( mi < minMetricVal ){
+                minMetricVal = mi;
+            }
+            if( ma > maxMetricVal ){
+                maxMetricVal = ma;
+            }
+        }
 
         // dirty function to get the range of the axis
         function getSetMinMaxVal(metric){
             for( let met in metric ){
-                let temp = metric[met];
-                let min = Math.min(temp);
-                let max = Math.max(temp);
-                if( min < minMetricVal ){
-                    minMetricVal = min;
-                }
-                if( max > maxMetricVal ){
-                    maxMetricVal = max;
-                }
+                // stack overflow steal
+                let temp = metric[met].slice(2).map(function (item) {
+                    return parseInt(item, 10);
+                });
+                minMaxFromArr(temp)
             }
         }
+        */
 
         // make sure that all the data is in the way that we need before we start doing things to it
         function setupData() {
 
-            function formatMetric(metric) {
+            function formatMetric(metric, key) {
                 let tempMetric = [];
                 metric = metric.split(/r?\n/);
+                metricHeaderList[key] = metric.shift().split(',')
                 for(let met in metric){
                     tempMetric.push(metric[met].split(','));
                 }
@@ -193,9 +213,10 @@
             }
 
             for( let met in metricList ){
-                metricList[met] = formatMetric(metricList[met]);
+                metricList[met] = formatMetric(metricList[met], met);
             }
 
+            /*
             function collectMetricHeaders() {
                 for (let met in metricList) {
                     let temp = metricList[met].shift();
@@ -205,6 +226,8 @@
             }
 
             metricHeaderList = collectMetricHeaders();
+            */
+
             sampleHeader = sample.shift();
 
             function sequenceToArray(sequence){
@@ -217,7 +240,9 @@
             }
             sequence = sequenceToArray(sequence)
 
-            getSetMinMaxVal(metricList[getMetricKey()])
+            //getSetMinMaxVal(metricList[getMetricKey()])
+            //console.log(minMetricVal)
+            //console.log(maxMetricVal)
 
         }
         if( setup ) {
@@ -298,7 +323,6 @@
         }
         // Time variable
         let x = timeVariable();// Time variable
-        console.log(x)
 
         // functions for determining which columns to use
         function getColIndexByName(colName, header){
@@ -340,7 +364,6 @@
         }
         // metric variable
         let z = metricVariable(getNumberOfSamplesToShow()); // metric variable
-        console.log(z)
 
         // index of the data within the field
         let dataIndex = getColIndexByName("data", sampleHeader);
@@ -405,7 +428,6 @@
 
         }
         let y = sequenceVariable(dataIndex, labelIndex, getNumberOfSamplesToShow())
-        console.log(y)
 
         function setToColor(labels){
             let colors = ['blue', 'red', 'orange', 'green', 'black', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
@@ -458,7 +480,6 @@
             }
         }
         let c = colorForClass(getNumberOfSamplesToShow()); // color based on the type of malware
-        console.log(c)
 
         // here is a plotly plot of the line data, not much that needs to be changed but the x y z c
         // of the data needs to be computed
@@ -466,9 +487,17 @@
 
         let endSliceMax;
 
+        function indOf(x, arr){
+            for( let ind in arr ){
+                if( arr[ind] === x ){
+                    return ind;
+                }
+            }
+        }
+
         function createDataLine(x, y, z, c, i){
 
-            let endSlice = z.indexOf(-1);
+            let endSlice = indOf("-1", z[i]);
 
             if( endSlice > endSliceMax ){
                 endSliceMax = endSlice;
@@ -489,6 +518,7 @@
                     width: 2,
                     color: c[i],
                     reversescale: false
+                    name:
                 }
             }
         }
@@ -510,7 +540,7 @@
                     xaxis:{ // Time
                         title: "Time position",
                         nticks: 5,
-                        range: [0, endSliceMax]
+                        range: [0, endSliceMax + 5]
                     },
                     yaxis:{ // Sequence
                         title: "Sequence Embedding",
@@ -519,7 +549,7 @@
                     },
                     zaxis:{ // Metric
                         title: getMetricKey(),
-                        range: [minMetricVal, maxMetricVal]
+                        range: [0, 0]
                     },
                 },
                 autosize: true,
