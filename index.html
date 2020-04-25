@@ -31,12 +31,128 @@
 
 <script>
 
+    let colors = ['blue', 'red', 'orange', 'green', 'black', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
+
     document.getElementById('metrics').addEventListener('change', handleFileSelect, false);
 
     let metricList = {};
+    let minMetricVals = {};
+    let maxMetricVals = {};
     let labelSet;
     let sample;
     let sequence;
+    let sampleHeader;
+    let metricHeaderList = {};
+
+    // functions for determining which columns to use
+    function getColIndexByName(colName, header){
+        for( let head in header ){
+            if( header[head].toLowerCase().replace(/\r?\n|\r/, '') === colName){
+                return head;
+            }
+        }
+        return -1;
+    }
+
+    function handleFileSelect(evt) {
+
+        function formatRow(item) {
+            let temp = parseFloat(item);
+            if( isNaN(temp) ){
+                return item
+            } else {
+                return parseFloat(item);
+            }
+        }
+
+        let files = evt.target.files; // FileList object
+
+        function formatMetric(metric, key) {
+
+            let tempMetric = [];
+            metric = metric.split(/r?\n/);
+            metricHeaderList[key] = metric.shift().split(',')
+
+            for(let met in metric){
+                tempMetric.push(metric[met].split(',').map(formatRow));
+            }
+
+            return tempMetric;
+        }
+
+        function sampleReformat(){
+
+            sample = sample.split(/r?\n/);
+            sampleHeader = sample.shift().split(',');
+
+            let dataIndex = getColIndexByName("data", sampleHeader);
+            let labelIndex = getColIndexByName("label", sampleHeader);
+            let sampleIndex = getColIndexByName("index", sampleHeader);
+
+            let tempList = [];
+
+            for( let samp in sample ){
+                let row = sample[samp].split(',');
+                let rowTemp = [];
+                for( let ind in row ){
+                    if( ind === dataIndex ){
+                        let dataSequence = row[ind].split(' ').map(formatRow);
+                        rowTemp.push(dataSequence);
+                    } else {
+                        rowTemp.push(formatRow(row[ind]));
+                    }
+                }
+                tempList.push(rowTemp);
+            }
+            sample = tempList;
+        }
+
+        // stole this from stackoverflow
+        // this is not my function all props go to him
+        // read multiple riles "fileReader"
+        function readmultifiles(files) {
+
+            let reader = new FileReader();
+            function readFile(index) {
+                if( index >= files.length ) {
+                    console.log('ready')
+                    createSettings()
+                    return;
+                }
+                let file = files[index];
+                reader.onload = function(e) {
+                    // get file content
+                    let bin = e.target.result;
+
+                    if (files[index].name.endsWith('metric.csv')) {
+                        metricList[files[index].name] = formatMetric(bin, files[index].name);
+                        console.log('metric');
+                    } else if (files[index].name.endsWith('label.csv')) {
+                        labelSet = bin.split(/r?\n/);
+                        console.log('labelSet');
+                    } else if (files[index].name.endsWith('sample.csv')) {
+                        sample = bin;
+                        sampleReformat();
+                        console.log('sample');
+                    } else if (files[index].name.endsWith('sequence.csv')){
+                        sequence = bin.split(/r?\n/);
+                        console.log('sequence')
+                    } else {
+                        console.log('Error file type not recognized.');
+                    }
+
+                    readFile(index+1);
+                }
+                reader.readAsText(file);
+            }
+            readFile(0);
+
+        }
+
+        readmultifiles(files);
+
+
+    }
 
     function createSettings() {
 
@@ -77,16 +193,16 @@
             let group = "<div id='selection'>";
             group += "<div id='number-selection'>";
             group += "<p> If percentage is selected, select the percent of sample using the slide bar.</p>";
-            group += "<input type='range' min='1' max='100' class='slider' id='percentNumPointsB'>";
-            group += "<input type='radio' name='numberSelect' class='radio-button' id='percentNumPoints'> Percentage </input>";
-            group += "<input type='number' id='exactNumPointsB' class='exactPoints'>";
-            group += "<input type='radio' name='numberSelect' class='radio-button' id='exactNumPoints'> Exact </input>";
-            group += "<div>";
+            group += "<input type='range' min='1' max='100' class='slider' id='percentNumPoints'>";
+            group += "<input type='radio' name='numberSelect' class='radio-button' id='percentNumPointsB'> Percentage </input>";
+            group += "<input type='number' id='exactNumPoints' class='exactPoints'>";
+            group += "<input type='radio' name='numberSelect' class='radio-button' id='exactNumPointsB'> Exact </input>";
+            group += "</div>";
             group += "<div id='sample-selection'>";
             group += "<p> Select from sample : </p>";
             group += "<input type='radio' name='sampleSelect' class='radio-button' id='topDownSelect'> Top Down </input>";
             group += "<input type='radio' name='sampleSelect' class='radio-button' id='randomSelect'> Random </input>"
-            group += "<div>";
+            group += "</div>";
             group += "</div>";
 
             $("div.number-slider").html(group);
@@ -99,141 +215,17 @@
 
         $("div.ready").remove();
         $(".ready").remove();
-
     }
-
-    function handleFileSelect(evt) {
-        let files = evt.target.files; // FileList object
-
-        function sequenceToArray(sequence){
-            let goodSequence = [];
-            sequence = sequence.split(/r?\n/)
-            for( let seq in sequence){
-                goodSequence.push(sequence[seq])
-            }
-            return sequence
-        }
-
-        function formatMetric(metric, key) {
-            let tempMetric = [];
-            metric = metric.split(/r?\n/);
-            metricHeaderList[key] = metric.shift().split(',')
-            for(let met in metric){
-                tempMetric.push(metric[met].split(','));
-            }
-            metric = tempMetric;
-            return metric;
-        }
-
-        function sampleReformat(){
-            sample = sample.split(/r?\n/);
-            let tempList = [];
-            for( let temp in sample ){
-                let slap = sample[temp].split(',');
-                if( slap.length > 1) {
-                    tempList.push(slap);
-                }
-
-            }
-            sample = tempList;
-        }
-
-
-        // stole this from stackoverflow
-        // this is not my function all props go to him
-        // read multiple riles "fileReader"
-        function readmultifiles(files) {
-            let reader = new FileReader();
-            function readFile(index) {
-                if( index >= files.length ) {
-                    console.log('ready')
-                    return;
-                }
-                let file = files[index];
-                reader.onload = function(e) {
-                    // get file content
-                    let bin = e.target.result;
-
-                    if (files[index].name.endsWith('metric.csv')) {
-                        metricList[files[index].name] = formatMetric(bin, files[index].name);
-                        console.log('metric');
-                    } else if (files[index].name.endsWith('label.csv')) {
-                        labelSet = bin.split(/r?\n/);
-                        console.log('labelSet');
-                    } else if (files[index].name.endsWith('sample.csv')) {
-                        sample = bin;
-                        sampleReformat();
-                        sampleHeader = sample.shift();
-                        console.log('sample');
-                    } else if (files[index].name.endsWith('sequence.csv')){
-                        sequence = sequenceToArray(bin);
-                        console.log('sequence')
-                    } else {
-                        console.log('Error file type not recognized.');
-                    }
-
-                    readFile(index+1);
-                }
-
-                reader.readAsText(file);
-            }
-            readFile(0);
-
-            $("div.ready").html("<input type='button' id='ready-button' value='ready' >");
-        }
-
-        readmultifiles(files);
-
-
-
-        document.getElementById('ready-button').addEventListener('click', createSettings, false);
-    }
-
-    let setup = true;
-    let sampleHeader;
-    let metricHeaderList = {};
 
     function plot_valid(){
 
-        //let minMetricVal = 100000000;
-        //let maxMetricVal = -100000000;
+        // index of the data within the field
 
-        /*
-        // IDK math.min and max didn't work for me
-        function minMaxFromArr(arr) {
-            let mi = arr[0]
-            let ma = arr[0]
-            let i = 0
-            while( i < arr.length ){
-                if( mi > arr[i] ){
-                    mi = arr[i]
-                } else if ( ma < arr [i] ){
-                    ma = arr[i]
-                }
-            }
-            if( mi < minMetricVal ){
-                minMetricVal = mi;
-            }
-            if( ma > maxMetricVal ){
-                maxMetricVal = ma;
-            }
-        }
-
-        // dirty function to get the range of the axis
-        function getSetMinMaxVal(metric){
-            for( let met in metric ){
-                // stack overflow steal
-                let temp = metric[met].slice(2).map(function (item) {
-                    return parseInt(item, 10);
-                });
-                minMaxFromArr(temp)
-            }
-        }
-        */
+        let dataIndex = getColIndexByName("data", sampleHeader);
+        let labelIndex = getColIndexByName("label", sampleHeader);
+        let sampleIndex = getColIndexByName("index", sampleHeader);
 
         // make sure that all the data is in the way that we need before we start doing things to it
-
-
         // get the color that is selected
         function getColor(){
             let allColor = document.getElementById('total').checked;
@@ -262,14 +254,34 @@
             return temp;
         }
         // get the slider value that is shown
-        function getSliderValue(){
-            return document.getElementById('numPoints').value;
+        function getPercentSliderValue(){
+            return document.getElementById('percentNumPoints').value;
+        }
+        // get the number value that is shown
+        function getExactNumberValue(){
+            return document.getElementById('exactNumPoints').value;
+        }
+        // get the checked value of the radio button
+        function getPercentSliderButtonChecked() {
+            return document.getElementById('percentNumPointsB').checked;
+        }
+        // get the checked value of the radio button
+        function getExactButtonChecked() {
+            return document.getElementById('exactNumPointsB').checked;
         }
         // get the number of samples from the total amount to show
         function getNumberOfSamplesToShow() {
-            let perNumber = getSliderValue();
-            let numSamples = sample.length;
-            return Math.floor(numSamples * (perNumber / 100));
+
+            if(getPercentSliderButtonChecked()){
+                let perNumber = getPercentSliderValue();
+                let numSamples = sample.length;
+                return Math.floor(numSamples * (perNumber / 100));
+            } else if (getExactButtonChecked()){
+                return getExactNumberValue();
+            } else {
+                return 25;
+            }
+
         }
         // get the length of the metric 0
         function getMetricLength(metKey){
@@ -300,6 +312,22 @@
             return sequence.length
         }
 
+        // get the types of selection of the sample
+        let sampleSelected;
+        let sampleSelectedIndexs;
+        function getSampleOrTopDown() {
+            if( document.getElementById('topDownSelect').checked ){
+                sampleSelectedIndexs = false;
+                return "topdown";
+            } else if ( document.getElementById('randomSelect').checked ) {
+                sampleSelectedIndexs = Array.from({length:getNumberOfSamplesToShow()}, () => Math.floor(Math.random() * get))
+                return "random";
+            } else {
+                return "default";
+            }
+        }
+        let selectionOfSampple = getSampleOrTopDown()
+
         // wrapper function for the spaghetti above
         function timeVariable(){
             return multiplyForNumber(getNumberOfSamplesToShow(), lengthToVariable(getMetricLength(getMetricKey())));
@@ -307,16 +335,6 @@
         }
         // Time variable
         let x = timeVariable();// Time variable
-
-        // functions for determining which columns to use
-        function getColIndexByName(colName, header){
-            for( let head in header ){
-                if( header[head].toLowerCase().replace(/\r?\n|\r/, '') === colName){
-                    return head;
-                }
-            }
-            return -1;
-        }
 
         //match the metrics to the samples used based on the index col
         function metricMatch(metric, sample, metricIndex, sampleIndex) {
@@ -340,7 +358,6 @@
             let metric = metricList[getMetricKey()];
 
             let metricIndex = getColIndexByName("index", metricHeaderList[getMetricKey()]);
-            let sampleIndex = getColIndexByName("index", sampleHeader);
 
             let metricMatched = metricMatch(metric, sample, metricIndex, sampleIndex);
 
@@ -348,10 +365,6 @@
         }
         // metric variable
         let z = metricVariable(getNumberOfSamplesToShow()); // metric variable
-
-        // index of the data within the field
-        let dataIndex = getColIndexByName("data", sampleHeader);
-        let labelIndex = getColIndexByName("label", sampleHeader);
 
         /*
         function createSequence(label, sample, indexOfData){
@@ -394,27 +407,19 @@
 
         function sequenceVariable(dataIndex, labelIndex, numberOfSamplesToShow) {
 
-            function rowSetup(row){
-                for( let i = row.length; i < getMetricLength(); i++ ){
-                   row.push(-1);
-                }
-                return row;
-            }
-
             let data = [];
             let i = 0;
             while(i < numberOfSamplesToShow){
-                data.push(rowSetup(sample[i][dataIndex].split(' ')));
+                data.push(sample[i][dataIndex]);
                 i++;
             }
-
             return data;
 
         }
         let y = sequenceVariable(dataIndex, labelIndex, getNumberOfSamplesToShow())
 
         function setToColor(labels){
-            let colors = ['blue', 'red', 'orange', 'green', 'black', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
+
             let returnColors = [];
             let i = 0;
             while( i < labels.length ){
@@ -445,7 +450,6 @@
         }
 
         function colorForClass(numberOfSamplesToShow) {
-
             let color = getColor();
             let labels = getLabelList(sample, sampleHeader).slice(0, numberOfSamplesToShow);
 
@@ -465,12 +469,11 @@
         }
         let c = colorForClass(getNumberOfSamplesToShow()); // color based on the type of malware
 
+
         // here is a plotly plot of the line data, not much that needs to be changed but the x y z c
         // of the data needs to be computed
         // Change someDiv to the name of the div that you want the plot in
-
         let endSliceMax;
-
         function indOf(x, arr){
             for( let ind in arr ){
                 if( arr[ind] === x ){
@@ -478,10 +481,9 @@
                 }
             }
         }
-
         function createDataLine(x, y, z, c, i){
 
-            let endSlice = indOf("-1", z[i]);
+            let endSlice = indOf(-1, z[i]);
 
             if( endSlice > endSliceMax ){
                 endSliceMax = endSlice;
@@ -491,6 +493,8 @@
             let yT = y[i].slice(0, endSlice);
             let zT = z[i].slice(0, endSlice);
 
+
+
             return {
                 type: 'scatter3d',
                 mode: 'lines',
@@ -498,6 +502,14 @@
                 y: yT,
                 z: zT,
                 opacity: 1,
+                name: "Index of the sample",
+                /*
+                // MATT
+                hovertemplate: [ // something here gets <br><extra> SEQUENCE_LABEL </extra>
+                    'x: %{x}',
+                    'y: %{y}',
+                    'z: %{z}'],
+                 */
                 line: {
                     width: 2,
                     color: c[i],
@@ -505,7 +517,6 @@
                 }
             }
         }
-
         function createDataLines(x, y, z, c){
             let tempList = [];
             for( let i in x ){
@@ -541,6 +552,7 @@
                 width: 800
             });
 
+        
     }
 
 </script>
