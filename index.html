@@ -15,10 +15,16 @@
 
 <!-- https://www.html5rocks.com/en/tutorials/file/dndfiles/ -->
 <!-- I did used this guys code to get multiple files in at the same time -->
-<input type="file" id="metrics" name="files[]" multiple />
-<output id="list-metrics"></output>
 
-<div class="ready"></div>
+
+
+<div class="ready">
+    <input class="ready" type="file" id="metrics" name="files[]" multiple />
+    <output class="ready" id="list-metrics"></output>
+    <input class="ready" type="number" id="checkNum" name="checkNumber">
+        Input number used in the metric file as nan, if nan do not input anything.
+    </input>
+</div>
 
 <form action='' id='plot-form' onsubmit='plot_valid();return false'>
     <div class=radial-buttons-list>
@@ -31,18 +37,20 @@
 
 <script>
 
-    let colors = ['blue', 'red', 'orange', 'green', 'black', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
+    let colors = ['blue', 'red', 'orange', 'green', 'gold', 'purple', 'yellow', 'teal', 'aqua', 'chocolate'];
 
     document.getElementById('metrics').addEventListener('change', handleFileSelect, false);
 
     let metricList = {};
     let minMetricVals = {};
     let maxMetricVals = {};
+    let metricNullNum;
     let labelSet;
     let sample;
     let sequence;
     let sampleHeader;
     let metricHeaderList = {};
+    let sampleSelected = [];
 
     // functions for determining which columns to use
     function getColIndexByName(colName, header){
@@ -73,8 +81,23 @@
             metric = metric.split(/r?\n/);
             metricHeaderList[key] = metric.shift().split(',')
 
+            minMetricVals[key] = 1000000
+            maxMetricVals[key] = -1000000
+
+            metricNullNum = parseFloat(document.getElementById('checkNum').value);
+
             for(let met in metric){
-                tempMetric.push(metric[met].split(',').map(formatRow));
+
+                let row = metric[met].split(',').map(formatRow)
+                tempMetric.push(row);
+                let rowSlice = row.slice(2);
+                for( let ind in rowSlice){
+                    if( minMetricVals[key] > rowSlice[ind] && rowSlice[ind] !== metricNullNum ){
+                        minMetricVals[key] = rowSlice[ind]
+                    } else if ( maxMetricVals[key] < rowSlice[ind] && rowSlice[ind] !== metricNullNum ) {
+                        maxMetricVals[key] = rowSlice[ind]
+                    }
+                }
             }
 
             return tempMetric;
@@ -98,6 +121,11 @@
                     if( ind === dataIndex ){
                         let dataSequence = row[ind].split(' ').map(formatRow);
                         rowTemp.push(dataSequence);
+                    } else if ( ind === labelIndex ){
+                        rowTemp.push(row[ind]);
+                        if(row[ind] in labelSet){
+
+                        }
                     } else {
                         rowTemp.push(formatRow(row[ind]));
                     }
@@ -117,6 +145,8 @@
                 if( index >= files.length ) {
                     console.log('ready')
                     createSettings()
+                    //$("div.ready").remove();
+                    $(".ready").remove();
                     return;
                 }
                 let file = files[index];
@@ -127,9 +157,6 @@
                     if (files[index].name.endsWith('metric.csv')) {
                         metricList[files[index].name] = formatMetric(bin, files[index].name);
                         console.log('metric');
-                    } else if (files[index].name.endsWith('label.csv')) {
-                        labelSet = bin.split(/r?\n/);
-                        console.log('labelSet');
                     } else if (files[index].name.endsWith('sample.csv')) {
                         sample = bin;
                         sampleReformat();
@@ -198,10 +225,10 @@
             group += "<input type='number' id='exactNumPoints' class='exactPoints'>";
             group += "<input type='radio' name='numberSelect' class='radio-button' id='exactNumPointsB'> Exact </input>";
             group += "</div>";
-            group += "<div id='sample-selection'>";
+            group += "<div id='sample-selection' class='sample-selection'>";
             group += "<p> Select from sample : </p>";
             group += "<input type='radio' name='sampleSelect' class='radio-button' id='topDownSelect'> Top Down </input>";
-            group += "<input type='radio' name='sampleSelect' class='radio-button' id='randomSelect'> Random </input>"
+            group += "<input type='radio' name='sampleSelect' class='radio-button' id='randomSelect'> Random </input>";
             group += "</div>";
             group += "</div>";
 
@@ -209,12 +236,11 @@
         }
         createNumberOfObservationsSlider();
 
-        $("div.submit-button-div").html("<input type='button' id='submit-button'> Submit </input>");
+        $("div.submit-button-div").html("<input type='button' id='submit-button' value='Submit'>");
 
         document.getElementById('submit-button').addEventListener('click', plot_valid, false);
 
-        $("div.ready").remove();
-        $(".ready").remove();
+
     }
 
     function plot_valid(){
@@ -313,20 +339,40 @@
         }
 
         // get the types of selection of the sample
-        let sampleSelected;
-        let sampleSelectedIndexs;
+
         function getSampleOrTopDown() {
             if( document.getElementById('topDownSelect').checked ){
-                sampleSelectedIndexs = false;
+                sampleSelected = [];
+                for( let i = 0; i < getNumberOfSamplesToShow(); i++ ){
+                    sampleSelected.push(sample[i])
+                }
                 return "topdown";
             } else if ( document.getElementById('randomSelect').checked ) {
-                sampleSelectedIndexs = Array.from({length:getNumberOfSamplesToShow()}, () => Math.floor(Math.random() * get))
+                let samplesToShow = getNumberOfSamplesToShow();
+                for( let i = 0; i < samplesToShow; i++ ){
+                    let randomIndex = Math.floor(Math.random() * sample.length) + 1;
+                    if( sampleSelected.indexOf(sample[randomIndex]) === -1){
+                        sampleSelected.push(sample[randomIndex]);
+                    }
+                }
                 return "random";
             } else {
+                for( let lab in labelSet ){
+                    let i = 0;
+                    let selectedNum = 0;
+                    while( selectedNum < 5 ){
+                        if( sample[i][labelIndex] === labelSet[lab] ){
+                            sampleSelected.push(sample[i]);
+                            selectedNum++;
+                        }
+                        i++;
+                    }
+                }
                 return "default";
             }
         }
-        let selectionOfSampple = getSampleOrTopDown()
+        let selectionOfSample = getSampleOrTopDown() // This is needed don't remove or comment out.
+        console.log(selectionOfSample)
 
         // wrapper function for the spaghetti above
         function timeVariable(){
@@ -339,9 +385,7 @@
         //match the metrics to the samples used based on the index col
         function metricMatch(metric, sample, metricIndex, sampleIndex) {
             let usedMetrics = [];
-
             let i = 0;
-
             while(i < metric.length){
                 for( let samp in sample ){
                     if( metric[i][metricIndex] === sample[samp][sampleIndex] ){
@@ -354,17 +398,18 @@
             return usedMetrics;
         }
         // wrapper function for the metric variables
-        function metricVariable(getNumberOfSamplesToShow){
+        function metricVariable(numberOfSamplesToShow, sample, sampleIndex){
             let metric = metricList[getMetricKey()];
 
             let metricIndex = getColIndexByName("index", metricHeaderList[getMetricKey()]);
 
             let metricMatched = metricMatch(metric, sample, metricIndex, sampleIndex);
 
-            return metricMatched.slice(0, getNumberOfSamplesToShow);
+            return metricMatched.slice(0, numberOfSamplesToShow);
         }
         // metric variable
-        let z = metricVariable(getNumberOfSamplesToShow()); // metric variable
+        let z = metricVariable(getNumberOfSamplesToShow(), sampleSelected, sampleIndex); // metric variable
+        console.log(z)
 
         /*
         function createSequence(label, sample, indexOfData){
@@ -405,18 +450,48 @@
         let y = sequenceVariable(sequence, dataIndex, getNumberOfSamplesToShow()); // api call translate
         */
 
-        function sequenceVariable(dataIndex, labelIndex, numberOfSamplesToShow) {
+        function sequenceVariable(dataIndex, sampleSelected) {
 
+            function dataToSequenceCategorical(row){
+                let tempSequence = [];
+                for( let ind in row ){
+                    tempSequence.push(sequence[row[ind]]);
+                }
+                return tempSequence;
+            }
+
+            /*
             let data = [];
+            let sampleIds = [];
+            let sequenceLabels = [];
             let i = 0;
             while(i < numberOfSamplesToShow){
                 data.push(sample[i][dataIndex]);
+                sampleIds.push(sample[i][sampleIndex])
+                sequenceLabels.push(dataToSequenceCategorical(sample[i][dataIndex]));
                 i++;
             }
-            return data;
+            return [data, sampleIds, sequenceLabels];
+            */
+
+            let data = [];
+            let sampleIds = [];
+            let sampleLabels = [];
+            let sequenceLabels = [];
+            for( let row in sampleSelected ){
+                data.push(sampleSelected[row][dataIndex]);
+                sampleIds.push(sampleSelected[row][sampleIndex]);
+                sampleLabels.push(sampleSelected[row][labelIndex])
+                sequenceLabels.push(dataToSequenceCategorical(sampleSelected[row][dataIndex]));
+            }
+            return [data, sampleIds, sequenceLabels, sampleLabels];
 
         }
-        let y = sequenceVariable(dataIndex, labelIndex, getNumberOfSamplesToShow())
+        let multiOut = sequenceVariable(dataIndex, sampleSelected)
+        let y = multiOut[0];
+        let sampleIds = multiOut[1];
+        let sequenceLabels = multiOut[2];
+        let sampleLabels = multiOut[3];
 
         function setToColor(labels){
 
@@ -439,19 +514,17 @@
             }
             return returnColors
         }
-
-        function getLabelList(sample, sampleHeader){
+        function getLabelList(selected, sampleHeader){
             let tempLabel = [];
             let labelIndex = getColIndexByName('label', sampleHeader);
-            for( let samp in sample ){
-                tempLabel.push(sample[samp][labelIndex]);
+            for( let samp in selected ){
+                tempLabel.push(selected[samp][labelIndex]);
             }
             return tempLabel;
         }
-
         function colorForClass(numberOfSamplesToShow) {
             let color = getColor();
-            let labels = getLabelList(sample, sampleHeader).slice(0, numberOfSamplesToShow);
+            let labels = getLabelList(sampleSelected, sampleHeader).slice(0, numberOfSamplesToShow);
 
             if( color.toLowerCase() === 'total' ){
                 return setToColor(labels);
@@ -481,9 +554,9 @@
                 }
             }
         }
-        function createDataLine(x, y, z, c, i){
+        function createDataLine(x, y, z, c, i, indexOfSample, sequenceLabel, label){
 
-            let endSlice = indOf(-1, z[i]);
+            let endSlice = indOf(metricNullNum, z[i]);
 
             if( endSlice > endSliceMax ){
                 endSliceMax = endSlice;
@@ -493,7 +566,7 @@
             let yT = y[i].slice(0, endSlice);
             let zT = z[i].slice(0, endSlice);
 
-
+            let name = "ID : key  keyT".replace('key', indexOfSample).replace('keyT', label)
 
             return {
                 type: 'scatter3d',
@@ -502,14 +575,8 @@
                 y: yT,
                 z: zT,
                 opacity: 1,
-                name: "Index of the sample",
-                /*
-                // MATT
-                hovertemplate: [ // something here gets <br><extra> SEQUENCE_LABEL </extra>
-                    'x: %{x}',
-                    'y: %{y}',
-                    'z: %{z}'],
-                 */
+                name: name,
+                hovertext: sequenceLabel,
                 line: {
                     width: 2,
                     color: c[i],
@@ -517,15 +584,24 @@
                 }
             }
         }
-        function createDataLines(x, y, z, c){
+
+        /*
+        function getMinLen(x, y, z){
+            let i = Math.min(x.length, y.length, z.length);
+            console.log(i)
+            return i
+        }
+         */
+
+        function createDataLines(x, y, z, c, sampleIds, sequenceLabels, selectedLabels){
             let tempList = [];
             for( let i in x ){
-                tempList.push(createDataLine(x, y, z, c, i));
+                tempList.push(createDataLine(x, y, z, c, i, sampleIds[i], sequenceLabels[i], selectedLabels[i]));
             }
             return tempList;
         }
 
-        let linesListDict = createDataLines(x, y, z, c);
+        let linesListDict = createDataLines(x, y, z, c, sampleIds, sequenceLabels, sampleLabels);
 
         Plotly.newPlot('plotDiv',
             linesListDict,
@@ -543,16 +619,14 @@
                     },
                     zaxis:{ // Metric
                         title: getMetricKey(),
-                        range: [0, 0]
+                        range: [minMetricVals[getMetricKey()], maxMetricVals[getMetricKey()]]
                     },
                 },
                 autosize: true,
                 autocolorscale: false,
-                height: 800,
-                width: 800
+                height: 1000,
+                width: 1000
             });
-
-        
     }
 
 </script>
