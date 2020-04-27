@@ -6,7 +6,7 @@
     <script src="https://cdn.plot.ly/plotly-latest.min.js" charset="utf-8"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-csv/0.71/jquery.csv-0.71.min.js"></script>
-    <script src="jquery-3.5.0.min.js"></script>
+    <script src="../jquery-3.5.0.min.js"></script>
 </head>
 <body>
 <p>3d sequence plotter.</p>
@@ -45,7 +45,7 @@
     let minMetricVals = {};
     let maxMetricVals = {};
     let metricNullNum;
-    let labelSet;
+    let labelSet = [];
     let sample;
     let sequence;
     let sampleHeader;
@@ -123,8 +123,8 @@
                         rowTemp.push(dataSequence);
                     } else if ( ind === labelIndex ){
                         rowTemp.push(row[ind]);
-                        if(row[ind] in labelSet){
-
+                        if(!labelSet.includes(row[ind])){
+                            labelSet.push(row[ind])
                         }
                     } else {
                         rowTemp.push(formatRow(row[ind]));
